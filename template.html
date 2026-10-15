@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>世界のニュース</title>
+<style>
+:root {
+  --bg: #f7f6f3; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
+  --line: #e4e2dd; --accent: #1f5fbf; --warn-bg: #fff4d6; --warn: #7a5600;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141416; --card: #1c1c1f; --text: #ececee; --muted: #9a9aa2;
+    --line: #2c2c31; --accent: #7fb0ff; --warn-bg: #3a3014; --warn: #f0cf7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 16px 48px; }
+header {
+  position: sticky; top: 0; z-index: 1; background: var(--bg);
+  padding: calc(env(safe-area-inset-top) + 14px) 0 0; border-bottom: 1px solid var(--line);
+}
+h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: .02em; }
+.updated { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.updated.stale { color: var(--warn); font-weight: 600; }
+[role=tablist] { display: flex; gap: 4px; }
+[role=tab] {
+  flex: 1; padding: 10px 0; border: 0; background: none; color: var(--muted);
+  font: inherit; font-weight: 600; border-bottom: 3px solid transparent; cursor: pointer;
+}
+[role=tab][aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+ul { list-style: none; margin: 0; padding: 0; }
+li { border-bottom: 1px solid var(--line); }
+li a { display: block; padding: 13px 2px; color: inherit; text-decoration: none; }
+li a:active { background: var(--card); }
+.title { display: block; font-size: 16px; }
+li a:visited .title { color: var(--muted); }
+.meta { display: block; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.empty { padding: 24px 2px; color: var(--muted); }
+.warn { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 13px; }
+footer { margin-top: 24px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>世界のニュース</h1>
+  <p class="updated" id="updated" data-ts="{{UPDATED_TS}}">{{UPDATED}} 更新（30分ごと）</p>
+  <div role="tablist">
+{{TABS}}
+  </div>
+</header>
+{{NOTE}}
+{{PANELS}}
+<footer>見出しは {{SOURCES}} から自動で集めています。本文は各媒体のサイトで読めます。</footer>
+</div>
+<script>
+(function () {
+  var tabs = document.querySelectorAll('[role=tab]');
+  function show(id) {
+    tabs.forEach(function (t) {
+      var on = t.id === 't-' + id;
+      t.setAttribute('aria-selected', on);
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    try { localStorage.setItem('tab', id); } catch (e) {}
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.id.slice(2)); }); });
+  try { var saved = localStorage.getItem('tab'); if (saved && document.getElementById('t-' + saved)) show(saved); } catch (e) {}
+
+  function ago(sec) {
+    if (sec < 60) return 'たった今';
+    if (sec < 3600) return Math.floor(sec / 60) + '分前';
+    if (sec < 86400) return Math.floor(sec / 3600) + '時間前';
+    return Math.floor(sec / 86400) + '日前';
+  }
+  function tick() {
+    var now = Date.now() / 1000;
+    document.querySelectorAll('time[data-ts]').forEach(function (el) {
+      if (!el.dataset.abs) el.dataset.abs = el.textContent;
+      el.textContent = ago(now - el.dataset.ts) + '（' + el.dataset.abs + '）';
+    });
+    var u = document.getElementById('updated');
+    var age = now - u.dataset.ts;
+    if (!u.dataset.abs) u.dataset.abs = u.textContent;
+    u.textContent = age > 2 * 3600
+      ? '⚠ 更新が止まっています（最終 ' + ago(age) + '）'
+      : u.dataset.abs.replace('更新', '更新・' + ago(age));
+    u.classList.toggle('stale', age > 2 * 3600);
+  }
+  tick();
+  setInterval(tick, 60000);
+
+  // アプリに戻ってきたとき、10分以上たっていれば読み直す
+  var loaded = Date.now();
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && Date.now() - loaded > 10 * 60000) location.reload();
+  });
+})();
+</script>
+</body>
+</html>
