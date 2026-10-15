@@ -27,8 +27,8 @@ FEEDS = [
 ]
 TABS = [("world", "世界"), ("economy", "経済")]
 MAX_AGE_HOURS = 36  # これより古い見出しは載せない
-MAX_ITEMS = 40      # タブごとの上限
-MAX_PER_SOURCE = 8  # 1つの媒体が並びすぎないようにする
+MAX_ITEMS = 20      # タブごとの上限
+MAX_PER_SOURCE = 5  # 1つの媒体が並びすぎないようにする
 
 
 def fetch(url):
@@ -74,10 +74,14 @@ def parse_feed(feed, raw):
         source = feed["source"]
         if source is None:
             source = child_text(el, "source")
-            m = re.match(r"^(.*)\s+-\s+([^-]+)$", title)
-            if m:
-                title = m.group(1).strip()
-                source = source or m.group(2).strip()
+            if source and title.endswith(" - " + source):
+                title = title[: -len(" - " + source)].strip()
+            else:
+                m = re.match(r"^(.*)\s+-\s+([^-]+)$", title)
+                if m:
+                    title = m.group(1).strip()
+                    source = source or m.group(2).strip()
+            source = re.sub(r"^https?://(www\.)?|/$", "", source or "")  # URLだけの媒体名はドメインにする
         items.append({"tab": feed["tab"], "title": title, "link": link,
                       "source": source or feed["name"], "ts": when.timestamp()})
     return items
@@ -123,19 +127,21 @@ def render(by_tab, failed, now):
     tabs_html, panels_html = [], []
     for i, (tab, label) in enumerate(TABS):
         sel = "true" if i == 0 else "false"
-        tabs_html.append(f'<button role="tab" id="t-{tab}" aria-controls="p-{tab}" aria-selected="{sel}">{label}</button>')
+        tabs_html.append(f'<button type="button" role="tab" id="t-{tab}" aria-controls="p-{tab}" aria-selected="{sel}">{label}</button>')
         rows = []
-        for it in by_tab[tab]:
+        for n, it in enumerate(by_tab[tab]):
+            cls = ' class="lead"' if n == 0 else ""
             rows.append(
-                f'<li><a href="{html.escape(it["link"])}" target="_blank" rel="noopener">'
-                f'<span class="title">{html.escape(it["title"])}</span>'
-                f'<span class="meta">{html.escape(it["source"])} · '
-                f'<time data-ts="{int(it["ts"])}">{fmt_jst(it["ts"])}</time></span></a></li>'
+                f'<li{cls} data-ts="{int(it["ts"])}"><a href="{html.escape(it["link"])}" target="_blank" rel="noopener">'
+                f'<span class="meta"><span class="src">{html.escape(it["source"])}</span>'
+                f'<time datetime="{dt.datetime.fromtimestamp(it["ts"], JST).isoformat()}">{fmt_jst(it["ts"])}</time></span>'
+                f'<span class="title">{html.escape(it["title"])}</span></a></li>'
             )
         body = "\n".join(rows) or '<li class="empty">見出しを取得できませんでした</li>'
         hidden = "" if i == 0 else " hidden"
-        panels_html.append(f'<ul role="tabpanel" id="p-{tab}" aria-labelledby="t-{tab}"{hidden}>\n{body}\n</ul>')
-    note = f'<p class="warn">取得できなかった取得元：{html.escape("、".join(failed))}</p>' if failed else ""
+        panels_html.append(f'<section role="tabpanel" id="p-{tab}" aria-labelledby="t-{tab}"{hidden}>'
+                           f'<ul class="list">\n{body}\n</ul></section>')
+    note = f'<p class="note">取得できなかった取得元：{html.escape("、".join(failed))}</p>' if failed else ""
     with open(os.path.join(ROOT, "template.html"), encoding="utf-8") as f:
         tpl = f.read()
     return (tpl.replace("{{UPDATED_TS}}", str(int(now.timestamp())))
